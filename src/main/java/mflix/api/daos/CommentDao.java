@@ -79,12 +79,15 @@ public class CommentDao extends AbstractMFlixDao {
    * returns the resulting Comment object.
    */
   public Comment addComment(Comment comment) {
-
-    // TODO> Ticket - Update User reviews: implement the functionality that enables adding a new
+    if (comment.getId() == null || comment.getId().isEmpty()) {
+      throw new IncorrectDaoOperation("Comment objects need to have an ID field set.");
+    }
+    // DONE> Ticket - Update User reviews: implement the functionality that enables adding a new
     // comment.
+    commentCollection.insertOne(comment);
     // TODO> Ticket - Handling Errors: Implement a try catch block to
     // handle a potential write exception when given a wrong commentId.
-    return null;
+    return comment;
   }
 
   /**
@@ -102,8 +105,30 @@ public class CommentDao extends AbstractMFlixDao {
    */
   public boolean updateComment(String commentId, String text, String email) {
 
-    // TODO> Ticket - Update User reviews: implement the functionality that enables updating an
+    // DONE> Ticket - Update User reviews: implement the functionality that enables updating an
     // user own comments
+
+    Bson filter = Filters.and(
+            Filters.eq("email", email),
+            Filters.eq("_id", new ObjectId(commentId)));
+    Bson update = Updates.combine(
+            Updates.set("text", text),
+            Updates.set("date", new Date()));
+
+    UpdateResult res = commentCollection.updateOne(filter, update);
+
+    if (res.getMatchedCount() > 0) {
+
+      if (res.getModifiedCount() != 1) {
+        log.warn("Comment `{}` text was not updated. Is it the same text?");
+      }
+
+      return true;
+    }
+    log.error(
+            "Could not update comment `{}`. Make sure the comment is owned by `{}`",
+            commentId,
+            email);
     // TODO> Ticket - Handling Errors: Implement a try catch block to
     // handle a potential write exception when given a wrong commentId.
     return false;
