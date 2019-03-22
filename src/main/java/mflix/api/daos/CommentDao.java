@@ -26,9 +26,13 @@ import org.springframework.stereotype.Component;
 
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
+import static com.mongodb.client.model.Accumulators.sum;
+import static com.mongodb.client.model.Aggregates.*;
+import static com.mongodb.client.model.Sorts.descending;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
@@ -142,7 +146,7 @@ public class CommentDao extends AbstractMFlixDao {
    * @return true if successful deletes the comment.
    */
   public boolean deleteComment(String commentId, String email) {
-    // TODO> Ticket Delete Comments - Implement the method that enables the deletion of a user
+    // DONE> Ticket Delete Comments - Implement the method that enables the deletion of a user
     // comment
     if (commentId == null || commentId.isEmpty()) {
       throw new IllegalArgumentException("CommentID is required.");
@@ -187,6 +191,11 @@ public class CommentDao extends AbstractMFlixDao {
     // // guarantee for the returned documents. Once a commenter is in the
     // // top 20 of users, they become a Critic, so mostActive is composed of
     // // Critic objects.
+    List<Bson> pipeline = Arrays.asList(
+            group("$email", sum("count", 1L)),
+            sort(descending("count")),
+            limit(20));
+    commentCollection.aggregate(pipeline, Critic.class).iterator().forEachRemaining(mostActive::add);
     return mostActive;
   }
 }
