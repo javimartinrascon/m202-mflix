@@ -60,11 +60,19 @@ public class UserDao extends AbstractMFlixDao {
    * @return True if successful, throw IncorrectDaoOperation otherwise
    */
   public boolean addUser(User user) {
-    //DONE > Ticket: Durable Writes -  you might want to use a more durable write concern here!
-    usersCollection.withWriteConcern(WriteConcern.MAJORITY).insertOne(user);
-    return true;
-    //TODO > Ticket: Handling Errors - make sure to only add new users
-    // and not users that already exist.
+    try {
+      //DONE > Ticket: Durable Writes -  you might want to use a more durable write concern here!
+      usersCollection.withWriteConcern(WriteConcern.MAJORITY).insertOne(user);
+      return true;
+
+    } catch (MongoWriteException e) {
+      //DONE > Ticket: Handling Errors - make sure to only add new users
+      // and not users that already exist.
+      log.error(
+              "Could not insert `{}` into `users` collection: {}", user.getEmail(), e.getMessage());
+      throw new IncorrectDaoOperation(
+              MessageFormat.format("User with email `{0}` already exists", user.getEmail()));
+    }
 
   }
 
@@ -77,16 +85,22 @@ public class UserDao extends AbstractMFlixDao {
    */
   public boolean createUserSession(String userId, String jwt) {
 
-    //DONE> Ticket: User Management - implement the method that allows session information to be
-    // stored in it's designated collection.
-    Bson updateFilter = new Document("user_id", userId);
-    Bson setUpdate = Updates.set("jwt", jwt);
-    UpdateOptions options = new UpdateOptions().upsert(true);
-    UpdateResult result = sessionsCollection.updateOne(updateFilter, setUpdate, options);
-
-    return null != result;
-    //TODO > Ticket: Handling Errors - implement a safeguard against
-    // creating a session with the same jwt token.
+    try {
+      //DONE> Ticket: User Management - implement the method that allows session information to be
+      // stored in it's designated collection.
+      Bson updateFilter = new Document("user_id", userId);
+      Bson setUpdate = Updates.set("jwt", jwt);
+      UpdateOptions options = new UpdateOptions().upsert(true);
+      sessionsCollection.updateOne(updateFilter, setUpdate, options);
+      return true;
+    } catch (MongoWriteException e) {
+      //DONE > Ticket: Handling Errors - implement a safeguard against
+      // creating a session with the same jwt token.
+      String errorMessage =
+              MessageFormat.format(
+                      "Unable to $set jwt token in sessions collection: {}", e.getMessage());
+      throw new IncorrectDaoOperation(errorMessage, e);
+    }
   }
 
   /**
@@ -130,20 +144,28 @@ public class UserDao extends AbstractMFlixDao {
    * @return true if user successfully removed
    */
   public boolean deleteUser(String email) {
-    // remove user sessions
-    //DONE> Ticket: User Management - implement the delete user method
-    if (deleteUserSessions(email)) {
-      Document userDeleteFilter = new Document("email", email);
-      DeleteResult res = usersCollection.deleteOne(userDeleteFilter);
+    try {
+      // remove user sessions
+      //DONE> Ticket: User Management - implement the delete user method
+      if (deleteUserSessions(email)) {
+        Document userDeleteFilter = new Document("email", email);
+        DeleteResult res = usersCollection.deleteOne(userDeleteFilter);
 
-      if (res.getDeletedCount() < 0) {
-        log.warn("User with `email` {} not found. Potential concurrent operation?!");
+        if (res.getDeletedCount() < 0) {
+          log.warn("User with `email` {} not found. Potential concurrent operation?!");
+        }
+
+        return res.wasAcknowledged();
       }
-
-      return res.wasAcknowledged();
+    } catch (Exception e) {
+      //DONE > Ticket: Handling Errors - make this method more robust by
+      // handling potential exceptions.
+      String errorMessage = MessageFormat.format(
+              "Issue caught while trying to delete user `{}`: {}",
+              email,
+              e.getMessage());
+      throw new IncorrectDaoOperation(errorMessage);
     }
-    //TODO > Ticket: Handling Errors - make this method more robust by
-    // handling potential exceptions.
     return false;
   }
 
@@ -156,7 +178,7 @@ public class UserDao extends AbstractMFlixDao {
    * @return User object that just been updated.
    */
   public boolean updateUserPreferences(String email, Map<String, ?> userPreferences) {
-    //TODO> Ticket: User Preferences - implement the method that allows for user preferences to
+    //DONE> Ticket: User Preferences - implement the method that allows for user preferences to
     // be updated.
     if (userPreferences == null) {
       throw new IncorrectDaoOperation("userPreferences cannot be set to null");
@@ -165,6 +187,7 @@ public class UserDao extends AbstractMFlixDao {
     // create query filter and update object.
     Bson updateFilter = new Document("email", email);
     Bson updateObject = Updates.set("preferences", userPreferences);
+    try {
       // update one document matching email.
       UpdateResult res = usersCollection.updateOne(updateFilter, updateObject);
       if (res.getModifiedCount() < 1) {
@@ -174,8 +197,15 @@ public class UserDao extends AbstractMFlixDao {
                 userPreferences);
       }
       return true;
-
-      //TODO > Ticket: Handling Errors - make this method more robust by
-    // handling potential exceptions when updating an entry.
+    } catch (MongoWriteException e) {
+      //DONE > Ticket: Handling Errors - make this method more robust by
+      // handling potential exceptions when updating an entry.
+      String errorMessage =
+              MessageFormat.format(
+                      "Issue caught while trying to update user `{}`: {}",
+                      email,
+                      e.getMessage());
+      throw new IncorrectDaoOperation(errorMessage);
+    }
   }
 }

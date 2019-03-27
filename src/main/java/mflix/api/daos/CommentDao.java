@@ -88,10 +88,17 @@ public class CommentDao extends AbstractMFlixDao {
     }
     // DONE> Ticket - Update User reviews: implement the functionality that enables adding a new
     // comment.
-    commentCollection.insertOne(comment);
-    // TODO> Ticket - Handling Errors: Implement a try catch block to
-    // handle a potential write exception when given a wrong commentId.
-    return comment;
+    try {
+      commentCollection.insertOne(comment);
+      return comment;
+    } catch (MongoWriteException e) {
+      // DONE> Ticket - Handling Errors: Implement a try catch block to
+      // handle a potential write exception when given a wrong commentId.
+      String errorMessage =
+              MessageFormat.format(
+                      "Error occurred while adding a new Comment `{}`: {}", comment, e.getMessage());
+      throw new IncorrectDaoOperation(errorMessage);
+    }
   }
 
   /**
@@ -119,23 +126,32 @@ public class CommentDao extends AbstractMFlixDao {
             Updates.set("text", text),
             Updates.set("date", new Date()));
 
-    UpdateResult res = commentCollection.updateOne(filter, update);
+    try {
 
-    if (res.getMatchedCount() > 0) {
+      UpdateResult res = commentCollection.updateOne(filter, update);
 
-      if (res.getModifiedCount() != 1) {
-        log.warn("Comment `{}` text was not updated. Is it the same text?");
+      if (res.getMatchedCount() > 0) {
+
+        if (res.getModifiedCount() != 1) {
+          log.warn("Comment `{}` text was not updated. Is it the same text?");
+        }
+
+        return true;
       }
+      log.error(
+              "Could not update comment `{}`. Make sure the comment is owned by `{}`",
+              commentId,
+              email);
+      return false;
 
-      return true;
+    } catch (MongoWriteException e) {
+      // DONE> Ticket - Handling Errors: Implement a try catch block to
+      // handle a potential write exception when given a wrong commentId.
+      String messageError =
+              MessageFormat.format(
+                      "Error occurred while updating comment `{}`: {}", commentId, e.getMessage());
+      throw new IncorrectDaoOperation(messageError);
     }
-    log.error(
-            "Could not update comment `{}`. Make sure the comment is owned by `{}`",
-            commentId,
-            email);
-    // TODO> Ticket - Handling Errors: Implement a try catch block to
-    // handle a potential write exception when given a wrong commentId.
-    return false;
   }
 
   /**
@@ -161,6 +177,7 @@ public class CommentDao extends AbstractMFlixDao {
 
     // in case the delete count is different than one the document
     // either does not exist or it does not match the email + _id filter.
+    try {
       DeleteResult res = commentCollection.deleteOne(filter);
       if (res.getDeletedCount() != 1) {
         log.warn(
@@ -171,9 +188,14 @@ public class CommentDao extends AbstractMFlixDao {
         return false;
       }
       return true;
-    // TIP: make sure to match only users that own the given commentId
-    // TODO> Ticket Handling Errors - Implement a try catch block to
-    // handle a potential write exception when given a wrong commentId.
+    } catch (MongoWriteException e) {
+      // TIP: make sure to match only users that own the given commentId
+      // DONE> Ticket Handling Errors - Implement a try catch block to
+      // handle a potential write exception when given a wrong commentId.
+      String errorMessage =
+              MessageFormat.format("Error deleting comment " + "`{}`: {}", commentId, e);
+      throw new IncorrectDaoOperation(errorMessage);
+    }
   }
 
   /**
